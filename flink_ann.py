@@ -5,11 +5,10 @@ import argparse
 import logging
 import sys
 import argparse
+import os 
 
-from sklearn.preprocessing import LabelEncoder
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
 
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import (DataTypes, TableDescriptor, Schema, StreamTableEnvironment, TableEnvironment, EnvironmentSettings)
@@ -23,8 +22,9 @@ class Predict(ScalarFunction):
         self.kerasModelPath = kerasModelPath
 
     def open(self, func_context):
-        import tensorflow as tf        
-        self.ann = tf.keras.models.load_model(self.kerasModelPath)        
+        import tensorflow as tf 
+        print(f"is file at {self.kerasModelPath}: {os.path.isfile(self.kerasModelPath)}")
+        self.ann = tf.keras.models.load_model(self.kerasModelPath)
 
     def eval(self, *args):        
         a = np.array([args])
@@ -32,7 +32,7 @@ class Predict(ScalarFunction):
         prediction = self.ann.predict(np.array([features]))[0, 0]        
         return Row(raw_prediction=prediction, exited=prediction > 0.5)
 
-def churn_analysis(trainDataPath: str, liveDataPath: str, kerasModelPath: str):    
+def churn_analysis(trainDataPath: str, liveDataPath: str, kerasModelPath: str):
     dataset = pd.read_csv(trainDataPath)
     features = dataset.iloc[:, 3:-1].values
 
