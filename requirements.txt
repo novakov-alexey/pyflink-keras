@@ -1,4 +1,0 @@
-pandas
-scikit-learn
-ipython
-# apache-flink-libraries==1.18.1

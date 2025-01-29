@@ -1,5 +1,5 @@
 create-env:
-	conda create --prefix ./ann python=3.8
+	conda create --prefix ./ann python=3.10
 	conda activate ./ann
 
 install-macos:
@@ -9,9 +9,8 @@ install-macos:
 	conda install pandas scikit-learn
 	python -m pip install apache-flink==1.18.1
 
-install-linux:
-	python -m pip install tensorflow
-	conda install pandas scikit-learn
+install-linux:	
+	conda install --file linux-requirements.txt
 	python -m pip install apache-flink==1.18.1
 
 local-run:

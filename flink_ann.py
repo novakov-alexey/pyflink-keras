@@ -32,8 +32,8 @@ class Predict(ScalarFunction):
         prediction = self.ann.predict(np.array([features]))[0, 0]        
         return Row(raw_prediction=prediction, exited=prediction > 0.5)
 
-def churn_analysis(trainDataPath: str, liveDataPath: str, kerasModelPath: str):
-    dataset = pd.read_csv(trainDataPath)
+def churn_analysis(args):
+    dataset = pd.read_csv(args.trainDataPath)
     features = dataset.iloc[:, 3:-1].values
 
     le = LabelEncoder()
@@ -72,23 +72,35 @@ def churn_analysis(trainDataPath: str, liveDataPath: str, kerasModelPath: str):
     tableDesc = (TableDescriptor
                 .for_connector('filesystem')
                 .schema(schema)
-                .option("path", liveDataPath)
+                .option("path", args.liveDataPath)
                 .option("format", "csv")
                 .option("csv.allow-comments", "true")
+                .option("source.monitor-interval", "3s")
                 .build())
     
-    predict = udf(Predict(transform, kerasModelPath), result_type=DataTypes.ROW(
+    result_type = DataTypes.ROW(
         [
             DataTypes.FIELD('raw_prediction', DataTypes.FLOAT()),
             DataTypes.FIELD('exited', DataTypes.BOOLEAN())
-        ]))
+        ])
+
+    predict = udf(Predict(transform, args.kerasModelPath), result_type=result_type)
     t_env.create_temporary_function("predict", predict)
 
     clients = t_env.from_descriptor(tableDesc)
     cols = with_columns(range_('CreditScore', 'EstimatedSalary'))
+    
 
     clients.select(predict(cols)) \
-        .execute() \
+        .execute_insert(TableDescriptor
+                .for_connector('filesystem')
+                .schema(Schema.new_builder()              
+                    .column("_c0", result_type)
+                    .build())
+                .option("path", args.sinkDataPath)
+                .option("format", "csv")
+                .option("csv.allow-comments", "true")                
+                .build()) \
         .print()
 
 if __name__ == '__main__':
@@ -105,7 +117,7 @@ if __name__ == '__main__':
         '--live-data-file',
         dest='liveDataPath',
         required=False,
-        default='./test_data/Churn_Modelling.csv',
+        default='./test_data',
         help='Path to CSV live data file for model inference')
         
     parser.add_argument(
@@ -113,9 +125,16 @@ if __name__ == '__main__':
         dest='kerasModelPath',
         required=False,
         default='./saved_model/ann-customer-churn.keras',
-        help='Path to Kearas Model file')
+        help='Path to Keras Model file')
+
+    parser.add_argument(
+        '--sink-path',
+        dest='sinkDataPath',
+        required=False,
+        default='./sink',
+        help='Path to store ML model results')
 
     argv = sys.argv[1:]
     known_args, _ = parser.parse_known_args(argv)
     
-    churn_analysis(known_args.trainDataPath, known_args.liveDataPath, known_args.kerasModelPath)
+    churn_analysis(known_args)
