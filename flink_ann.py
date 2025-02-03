@@ -5,7 +5,6 @@ import argparse
 import logging
 import sys
 import argparse
-import os 
 
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
@@ -22,14 +21,12 @@ class Predict(ScalarFunction):
         self.kerasModelPath = kerasModelPath
 
     def open(self, func_context):
-        import tensorflow as tf 
-        print(f"is file at {self.kerasModelPath}: {os.path.isfile(self.kerasModelPath)}")
         self.ann = tf.keras.models.load_model(self.kerasModelPath)
 
-    def eval(self, *args):        
+    def eval(self, *args):
         a = np.array([args])
         features = self.transform(a).flatten()
-        prediction = self.ann.predict(np.array([features]))[0, 0]        
+        prediction = self.ann.predict(np.array([features]))[0, 0]
         return Row(raw_prediction=prediction, exited=prediction > 0.5)
 
 def churn_analysis(args):
@@ -49,10 +46,10 @@ def churn_analysis(args):
         arr_2d[:, 2] = le.transform(arr_2d[:, 2])
         a = ct.transform(arr_2d)
         return sc.transform(a)
-    
+
     t_env = TableEnvironment.create(EnvironmentSettings.in_streaming_mode())
 
-    schema = (Schema.new_builder()              
+    schema = (Schema.new_builder()
               .column("RowNumber", DataTypes.INT())
               .column("CustomerId", DataTypes.INT())
               .column("Surname", DataTypes.STRING())
@@ -66,9 +63,9 @@ def churn_analysis(args):
               .column("HasCrCard", DataTypes.DOUBLE())
               .column("IsActiveMember", DataTypes.DOUBLE())
               .column("EstimatedSalary", DataTypes.DOUBLE())
-              .column("Exited", DataTypes.DOUBLE())              
+              .column("Exited", DataTypes.DOUBLE())
               .build())
-        
+
     tableDesc = (TableDescriptor
                 .for_connector('filesystem')
                 .schema(schema)
@@ -77,7 +74,7 @@ def churn_analysis(args):
                 .option("csv.allow-comments", "true")
                 .option("source.monitor-interval", "3s")
                 .build())
-    
+
     result_type = DataTypes.ROW(
         [
             DataTypes.FIELD('raw_prediction', DataTypes.FLOAT()),
@@ -89,23 +86,21 @@ def churn_analysis(args):
 
     clients = t_env.from_descriptor(tableDesc)
     cols = with_columns(range_('CreditScore', 'EstimatedSalary'))
-    
 
-    clients.select(predict(cols)) \
+    clients.select(predict(cols).alias("prediction")) \
         .execute_insert(TableDescriptor
                 .for_connector('filesystem')
-                .schema(Schema.new_builder()              
-                    .column("_c0", result_type)
+                .schema(Schema.new_builder()
+                    .column("prediction", result_type)
                     .build())
                 .option("path", args.sinkDataPath)
                 .option("format", "csv")
-                .option("csv.allow-comments", "true")                
-                .build()) \
-        .print()
+                .option("csv.allow-comments", "true")
+                .build())        
 
 if __name__ == '__main__':
     logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format="%(message)s")
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--extractor-train-file',
@@ -119,7 +114,7 @@ if __name__ == '__main__':
         required=False,
         default='./test_data',
         help='Path to CSV live data file for model inference')
-        
+
     parser.add_argument(
         '--keras-model-file',
         dest='kerasModelPath',
@@ -136,5 +131,5 @@ if __name__ == '__main__':
 
     argv = sys.argv[1:]
     known_args, _ = parser.parse_known_args(argv)
-    
+
     churn_analysis(known_args)
